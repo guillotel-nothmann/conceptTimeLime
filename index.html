@@ -35,6 +35,12 @@ body {
     
     <script>
 
+console.log("Widget chargé");
+grist.ready();
+grist.onRecords(records => {
+    console.log("Records reçus:", records);
+    render(records);
+});
 // --------------------------------------------------------
 // RECEIVE DATA FROM GRIST
 // --------------------------------------------------------
