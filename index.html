@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Annual Timeline</title>
+    <title>Concept Timeline</title>
     <style>
     body {
       font-family: sans-serif;
@@ -15,6 +15,7 @@
       height: 400px;
       overflow-x: auto;
       padding-top: 40px;
+      padding-left: 160px; /* pour laisser la place à l'axe vertical */
     }
 
     #controls {
@@ -65,7 +66,7 @@
       position: absolute;
       font-size: 12px;
       text-align: right;
-      width: 150px;
+      width: 140px;
       right: 100%;
       margin-right: 10px;
       white-space: nowrap;
@@ -88,30 +89,36 @@
     const zoomLevelSpan = document.getElementById("zoom-level");
 
     let recordsData = [];
-    let scale = 10; // 10px par an initialement
+    let scale = 10; // px par an initial
 
-    // Communication avec GRIST
-    window.grist?.ready({
-      columns: ["hasStartYear", "hasEndYear", "hasColor", "hasName"]
-    });
+    // --- Initialisation GRIST ---
+    if (window.grist) {
+      window.grist.ready({
+        columns: ["hasStartYear", "hasEndYear", "hasColor", "hasName"]
+      });
 
-    window.grist?.onRecords(async (records) => {
-      recordsData = records;
-      fitToScreen();
-    });
+      window.grist.onRecords((records) => {
+        recordsData = records.map(r => ({
+          hasStartYear: r.hasStartYear,
+          hasEndYear: r.hasEndYear,
+          hasColor: r.hasColor,
+          hasName: r.hasName
+        }));
+        fitToScreen();
+      });
+    }
 
     function renderTimeline() {
       timeline.innerHTML = "";
       if (!recordsData.length) return;
 
-      const startYears = recordsData.map(r => r.hasStartYear).filter(v => v !== null);
-      const endYears = recordsData.map(r => r.hasEndYear || r.hasStartYear);
-
+      const startYears = recordsData.map(r => r.hasStartYear).filter(v => v != null);
+      const endYears = recordsData.map(r => r.hasEndYear != null ? r.hasEndYear : r.hasStartYear);
       const minYear = Math.min(...startYears) - 5;
       const maxYear = Math.max(...endYears) + 5;
 
-      // -- Graduations tous les 10 ans --
-      for (let year = Math.floor(minYear / 10) * 10; year <= maxYear; year += 10) {
+      // --- Axe horizontal (ticks par décennie) ---
+      for (let year = Math.floor(minYear/10)*10; year <= maxYear; year += 10) {
         let tick = document.createElement("div");
         tick.className = "tick";
         tick.style.left = (year - minYear) * scale + "px";
@@ -119,10 +126,10 @@
         timeline.appendChild(tick);
       }
 
-      // -- Barres des événements avec labels verticaux --
-      let yOffset = 40;
+      // --- Barres avec labels verticaux ---
+      let yOffset = 20;
 
-      recordsData.forEach((r) => {
+      recordsData.forEach(r => {
         if (r.hasStartYear == null) return;
 
         const start = r.hasStartYear;
@@ -138,14 +145,14 @@
         bar.style.width = ((end - start) * scale) + "px";
         bar.style.background = color;
 
-        // Label années au-dessus de la barre
+        // Label année
         let label = document.createElement("div");
         label.className = "label";
         label.style.left = (start - minYear) * scale + "px";
         label.style.top = (yOffset + 22) + "px";
         label.textContent = `${start}–${end}`;
 
-        // Label vertical (nom de la section)
+        // Label vertical
         let yLabel = document.createElement("div");
         yLabel.className = "y-axis-label";
         yLabel.style.top = yOffset + "px";
@@ -161,7 +168,7 @@
       timeline.style.width = (maxYear - minYear) * scale + 200 + "px";
     }
 
-    // -- Zoom --
+    // --- Zoom ---
     function zoomIn() {
       scale *= 1.5;
       zoomLevelSpan.textContent = `Zoom: ${scale.toFixed(1)}px/an`;
@@ -174,7 +181,7 @@
       renderTimeline();
     }
 
-    // -- Ajustement automatique pour tenir l’écran --
+    // --- Ajustement automatique pour tenir l’écran ---
     function fitToScreen() {
       if (!recordsData.length) return;
       const containerWidth = document.getElementById("gantt-container").offsetWidth;
@@ -182,8 +189,7 @@
       const endYears = recordsData.map(r => r.hasEndYear || r.hasStartYear);
       const minYear = Math.min(...startYears);
       const maxYear = Math.max(...endYears);
-
-      scale = containerWidth / (maxYear - minYear + 10); // +10 pour marge
+      scale = containerWidth / (maxYear - minYear + 10);
       zoomLevelSpan.textContent = `Zoom: ${scale.toFixed(1)}px/an`;
       renderTimeline();
     }
