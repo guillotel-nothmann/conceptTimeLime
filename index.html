@@ -60,6 +60,16 @@
       margin-left: 5px;
       white-space: nowrap;
     }
+
+    .y-axis-label {
+      position: absolute;
+      font-size: 12px;
+      text-align: right;
+      width: 150px;
+      right: 100%;
+      margin-right: 10px;
+      white-space: nowrap;
+    }
   </style>
   </head>
   
@@ -82,7 +92,7 @@
 
     // Communication avec GRIST
     window.grist?.ready({
-      columns: ["hasStartYear", "hasEndYear", "hasColor"]
+      columns: ["hasStartYear", "hasEndYear", "hasColor", "hasName"]
     });
 
     window.grist?.onRecords(async (records) => {
@@ -109,15 +119,16 @@
         timeline.appendChild(tick);
       }
 
-      // -- Barres des événements --
+      // -- Barres des événements avec labels verticaux --
       let yOffset = 40;
 
       recordsData.forEach((r) => {
         if (r.hasStartYear == null) return;
 
-        let start = r.hasStartYear;
-        let end = r.hasEndYear || r.hasStartYear;
-        let color = r.hasColor || "#777";
+        const start = r.hasStartYear;
+        const end = r.hasEndYear || r.hasStartYear;
+        const color = r.hasColor || "#777";
+        const name = r.hasName || "";
 
         // Barre
         let bar = document.createElement("div");
@@ -127,13 +138,20 @@
         bar.style.width = ((end - start) * scale) + "px";
         bar.style.background = color;
 
-        // Label
+        // Label années au-dessus de la barre
         let label = document.createElement("div");
         label.className = "label";
         label.style.left = (start - minYear) * scale + "px";
         label.style.top = (yOffset + 22) + "px";
         label.textContent = `${start}–${end}`;
 
+        // Label vertical (nom de la section)
+        let yLabel = document.createElement("div");
+        yLabel.className = "y-axis-label";
+        yLabel.style.top = yOffset + "px";
+        yLabel.textContent = name;
+
+        timeline.appendChild(yLabel);
         timeline.appendChild(bar);
         timeline.appendChild(label);
 
