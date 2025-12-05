@@ -4,7 +4,9 @@
     <meta charset="utf-8">
     <style>
 body { font-family: sans-serif; margin:0; }
-#gantt { position: relative; width: 100%; height: 400px; border: 1px solid #ccc; overflow-x: auto; }
+#controls { margin: 10px; }
+#gantt-container { overflow-x: auto; border:1px solid #ccc; height: 400px; }
+#gantt { position: relative; height: 400px; min-width: 800px; }
 .gantt-bar {
     position: absolute;
     height: 20px;
@@ -33,39 +35,54 @@ body { font-family: sans-serif; margin:0; }
     <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   </head>
   <body>
-    <div id="gantt"></div>
+    
+    <div id="controls">
+      <button onclick="zoomOut()">-</button>
+      <button onclick="zoomIn()">+</button>
+      <span id="zoom-level">Zoom: 1x</span>
+    </div>
+    
+    <div id="gantt-container">
+      <div id="gantt"></div>
+    </div>
+    
     <script>
+let recordsData = [];
+let scale = 10; // pixels par an
+
 grist.ready();
 grist.onRecords(records => {
-    console.log("Records reçus:", records);
-    renderGantt(records);
+    recordsData = records;
+    renderGantt();
 });
 
-function renderGantt(records) {
+function zoomIn() { scale *= 1.5; renderGantt(); updateZoomLabel(); }
+function zoomOut() { scale /= 1.5; renderGantt(); updateZoomLabel(); }
+function updateZoomLabel() { document.getElementById("zoom-level").textContent = `Zoom: ${scale.toFixed(1)}x`; }
+
+function renderGantt() {
     const container = document.getElementById("gantt");
     container.innerHTML = "";
+    if (!recordsData.length) return;
 
-    if (!records.length) return;
-
-    const startYears = records.map(r => r.hasStartYear);
-    const endYears = records.map(r => r.hasEndYear || r.hasStartYear);
+    const startYears = recordsData.map(r => r.hasStartYear);
+    const endYears = recordsData.map(r => r.hasEndYear || r.hasStartYear);
 
     const minYear = Math.floor(Math.min(...startYears) / 10) * 10;
     const maxYear = Math.ceil(Math.max(...endYears) / 10) * 10;
 
-    const SCALE = 10; // pixels par an
-    const widthPx = (maxYear - minYear) * SCALE + 100;
+    const widthPx = (maxYear - minYear) * scale + 100;
     container.style.width = widthPx + "px";
 
     // --- Axe décennal ---
     for (let year = minYear; year <= maxYear; year += 10) {
         const tick = document.createElement("div");
         tick.className = "gantt-tick";
-        tick.style.left = ((year - minYear) * SCALE) + "px";
+        tick.style.left = ((year - minYear) * scale) + "px";
 
         const label = document.createElement("div");
         label.className = "gantt-tick-label";
-        label.style.left = ((year - minYear) * SCALE - 10) + "px";
+        label.style.left = ((year - minYear) * scale - 10) + "px";
         label.textContent = year;
 
         container.appendChild(tick);
@@ -74,15 +91,15 @@ function renderGantt(records) {
 
     // --- Barres ---
     let yOffset = 40;
-    records.forEach(r => {
+    recordsData.forEach(r => {
         const start = r.hasStartYear;
         const end = r.hasEndYear || r.hasStartYear;
         const color = r.hasColor || "#777";
         const bar = document.createElement("div");
         bar.className = "gantt-bar";
-        bar.style.left = ((start - minYear) * SCALE) + "px";
+        bar.style.left = ((start - minYear) * scale) + "px";
         bar.style.top = yOffset + "px";
-        bar.style.width = ((end - start) * SCALE) + "px";
+        bar.style.width = ((end - start) * scale) + "px";
         bar.style.background = color;
         bar.textContent = `${start}–${end}`;
         container.appendChild(bar);
@@ -90,5 +107,6 @@ function renderGantt(records) {
     });
 }
 </script>
+    
   </body>
 </html>
