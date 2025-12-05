@@ -1,133 +1,83 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8" />
-    <title>Annual Timeline</title>
+    <meta charset="utf-8">
     
     <style>
-        body {
-            font-family: sans-serif;
-            margin: 0;
-            overflow-x: scroll;
-        }
-        #timeline {
-            position: relative;
-            padding: 40px;
-            border-top: 1px solid #ccc;
-            white-space: nowrap;
-        }
-        .tick {
-            position: absolute;
-            top: 0;
-            height: 10px;
-            border-left: 1px solid #999;
-            text-align: center;
-            font-size: 12px;
-            transform: translateX(-1px);
-        }
-        .bar {
-            position: absolute;
-            height: 20px;
-            border-radius: 4px;
-            opacity: 0.9;
-        }
-        .label {
-            position: absolute;
-            font-size: 12px;
-            margin-top: -2px;
-            margin-left: 5px;
-            white-space: nowrap;
-        }
-    </style>
+body {
+  font-family: sans-serif;
+}
+
+#gantt {
+    width: 100%;
+    height: 400px;
+    border: 1px solid #ccc;
+    position: relative;
+}
+
+.gantt-item {
+    position: absolute;
+    height: 20px;
+    border-radius: 4px;
+    color: white;
+    padding-left: 4px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+}
+</style>
+    
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   </head>
-  
   <body>
-    <div id="timeline"></div>
+    
+    <div id="gantt"></div>
     
     <script>
-        const timeline = document.getElementById("timeline");
 
-        // --- Communication GRIST MODERNE ---
-        window.grist.ready({
-            requiredAccess: 'read table'
-        });
+// --------------------------------------------------------
+// RECEIVE DATA FROM GRIST
+// --------------------------------------------------------
 
-        // Réception des données
-        window.grist.onRecords((records) => {
-            console.log("RECORDS:", records);
-            render(records);
-        });
+grist.ready();
 
-        // --- Rendu du widget ---
-        function render(records) {
-            timeline.innerHTML = "";
+grist.onRecords(records => {
+    if (!records) return;
+    renderGantt(records);
+});
 
-            if (!records || !records.length) {
-                console.warn("Aucun enregistrement reçu.");
-                return;
-            }
+// --------------------------------------------------------
+// RENDERING
+// --------------------------------------------------------
 
-            // Extraire les années
-            const startYears = records
-                .map(r => r.hasStartYear)
-                .filter(v => typeof v === "number");
+function renderGantt(rows) {
 
-            if (!startYears.length) {
-                console.warn("Aucun hasStartYear valide.");
-                return;
-            }
+    const container = document.getElementById("gantt");
+    container.innerHTML = "";
 
-            const endYears = records.map(r =>
-                (typeof r.hasEndYear === "number") ? r.hasEndYear : r.hasStartYear
-            );
+    if (!rows.length) return;
 
-            const minYear = Math.min(...startYears) - 5;
-            const maxYear = Math.max(...endYears) + 5;
+    // Extract years
+    const minYear = Math.min(...rows.map(r => r.hasStartYear));
+    const maxYear = Math.max(...rows.map(r => r.hasEndYear));
+    const total = maxYear - minYear;
 
-            const SCALE = 10; // 10px = 1 an
+    rows.forEach((item, index) => {
+        const left = ((item.hasStartYear - minYear) / total) * 100;
+        const width = ((item.hasEndYear - item.hasStartYear) / total) * 100;
 
-            // --- Graduations tous les 10 ans ---
-            for (let year = Math.floor(minYear / 10) * 10; year <= maxYear; year += 10) {
-                const tick = document.createElement("div");
-                tick.className = "tick";
-                tick.style.left = (year - minYear) * SCALE + "px";
-                tick.innerHTML = `<div style="margin-top:12px">${year}</div>`;
-                timeline.appendChild(tick);
-            }
+        const bar = document.createElement("div");
+        bar.className = "gantt-item";
+        bar.style.top = (index * 30) + "px";
+        bar.style.left = left + "%";
+        bar.style.width = width + "%";
+        bar.style.background = item.hasColor || "#666";
+        bar.textContent = item.label || item.id;
 
-            // --- Affichage des barres ---
-            let yOffset = 40;
+        container.appendChild(bar);
+    });
+}
 
-            records.forEach((r) => {
-                if (typeof r.hasStartYear !== "number") return;
-
-                const start = r.hasStartYear;
-                const end = (typeof r.hasEndYear === "number") ? r.hasEndYear : start;
-                const color = r.hasColor || "#777";
-
-                // Barre
-                const bar = document.createElement("div");
-                bar.className = "bar";
-                bar.style.left = (start - minYear) * SCALE + "px";
-                bar.style.top = yOffset + "px";
-                bar.style.width = Math.max(2, (end - start) * SCALE) + "px"; // largeur min 2px
-                bar.style.background = color;
-
-                // Label
-                const label = document.createElement("div");
-                label.className = "label";
-                label.style.left = (start - minYear) * SCALE + "px";
-                label.style.top = (yOffset + 22) + "px";
-                label.textContent = `${start}–${end}`;
-
-                timeline.appendChild(bar);
-                timeline.appendChild(label);
-
-                yOffset += 50;
-            });
-
-            timeline.style.width = (maxYear - minYear) * SCALE + 200 + "px";
-        }
-    </script>
+</script>
   </body>
 </html>
