@@ -1,120 +1,133 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>Annual Timeline</title>
-        <style>
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      overflow-x: scroll;
-    }
-    #timeline {
-      position: relative;
-      padding: 40px;
-      border-top: 1px solid #ccc;
-      white-space: nowrap;
-    }
-    .tick {
-      position: absolute;
-      top: 0;
-      height: 10px;
-      border-left: 1px solid #999;
-      text-align: center;
-      font-size: 12px;
-      transform: translateX(-1px);
-    }
-    .bar {
-      position: absolute;
-      height: 20px;
-      border-radius: 4px;
-      opacity: 0.9;
-    }
-    .label {
-      position: absolute;
-      font-size: 12px;
-      margin-top: -2px;
-      margin-left: 5px;
-      white-space: nowrap;
-    }
-  </style>
-    </head>
+  <head>
+    <meta charset="utf-8" />
+    <title>Annual Timeline</title>
     
-    <body>
-        <div id="timeline"></div>
-        
-        <script>
-    const timeline = document.getElementById("timeline");
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            overflow-x: scroll;
+        }
+        #timeline {
+            position: relative;
+            padding: 40px;
+            border-top: 1px solid #ccc;
+            white-space: nowrap;
+        }
+        .tick {
+            position: absolute;
+            top: 0;
+            height: 10px;
+            border-left: 1px solid #999;
+            text-align: center;
+            font-size: 12px;
+            transform: translateX(-1px);
+        }
+        .bar {
+            position: absolute;
+            height: 20px;
+            border-radius: 4px;
+            opacity: 0.9;
+        }
+        .label {
+            position: absolute;
+            font-size: 12px;
+            margin-top: -2px;
+            margin-left: 5px;
+            white-space: nowrap;
+        }
+    </style>
+  </head>
+  
+  <body>
+    <div id="timeline"></div>
+    
+    <script>
+        const timeline = document.getElementById("timeline");
 
-    // Communication avec GRIST
-    window.grist?.ready({
-      columns: [
-        "hasStartYear",
-        "hasEndYear",
-        "hasColor"
-      ]
-    });
+        // --- Communication GRIST MODERNE ---
+        window.grist.ready({
+            requiredAccess: 'read table'
+        });
 
-    window.grist?.onRecords(async (records) => {
-      render(records);
-    });
+        // Réception des données
+        window.grist.onRecords((records) => {
+            console.log("RECORDS:", records);
+            render(records);
+        });
 
-    function render(records) {
-      timeline.innerHTML = "";
+        // --- Rendu du widget ---
+        function render(records) {
+            timeline.innerHTML = "";
 
-      if (!records.length) return;
+            if (!records || !records.length) {
+                console.warn("Aucun enregistrement reçu.");
+                return;
+            }
 
-      const startYears = records.map(r => r.hasStartYear).filter(v => v !== null);
-      const endYears = records.map(r => r.hasEndYear || r.hasStartYear);
+            // Extraire les années
+            const startYears = records
+                .map(r => r.hasStartYear)
+                .filter(v => typeof v === "number");
 
-      const minYear = Math.min(...startYears) - 5;
-      const maxYear = Math.max(...endYears) + 5;
+            if (!startYears.length) {
+                console.warn("Aucun hasStartYear valide.");
+                return;
+            }
 
-      // Échelle : 10px = 1 an (modifiable)
-      const SCALE = 10;
+            const endYears = records.map(r =>
+                (typeof r.hasEndYear === "number") ? r.hasEndYear : r.hasStartYear
+            );
 
-      // -- Graduations tous les 10 ans --
-      for (let year = Math.floor(minYear / 10) * 10; year <= maxYear; year += 10) {
-        let tick = document.createElement("div");
-        tick.className = "tick";
-        tick.style.left = (year - minYear) * SCALE + "px";
-        tick.innerHTML = `<div style="margin-top:12px">${year}</div>`;
-        timeline.appendChild(tick);
-      }
+            const minYear = Math.min(...startYears) - 5;
+            const maxYear = Math.max(...endYears) + 5;
 
-      // -- Barres des événements --
-      let yOffset = 40;
+            const SCALE = 10; // 10px = 1 an
 
-      records.forEach((r) => {
-        if (r.hasStartYear == null) return;
+            // --- Graduations tous les 10 ans ---
+            for (let year = Math.floor(minYear / 10) * 10; year <= maxYear; year += 10) {
+                const tick = document.createElement("div");
+                tick.className = "tick";
+                tick.style.left = (year - minYear) * SCALE + "px";
+                tick.innerHTML = `<div style="margin-top:12px">${year}</div>`;
+                timeline.appendChild(tick);
+            }
 
-        let start = r.hasStartYear;
-        let end = r.hasEndYear || r.hasStartYear;
-        let color = r.hasColor || "#777";
+            // --- Affichage des barres ---
+            let yOffset = 40;
 
-        // Barre
-        let bar = document.createElement("div");
-        bar.className = "bar";
-        bar.style.left = (start - minYear) * SCALE + "px";
-        bar.style.top = yOffset + "px";
-        bar.style.width = ((end - start) * SCALE) + "px";
-        bar.style.background = color;
+            records.forEach((r) => {
+                if (typeof r.hasStartYear !== "number") return;
 
-        // Label
-        let label = document.createElement("div");
-        label.className = "label";
-        label.style.left = (start - minYear) * SCALE + "px";
-        label.style.top = (yOffset + 22) + "px";
-        label.textContent = `${start}–${end}`;
+                const start = r.hasStartYear;
+                const end = (typeof r.hasEndYear === "number") ? r.hasEndYear : start;
+                const color = r.hasColor || "#777";
 
-        timeline.appendChild(bar);
-        timeline.appendChild(label);
+                // Barre
+                const bar = document.createElement("div");
+                bar.className = "bar";
+                bar.style.left = (start - minYear) * SCALE + "px";
+                bar.style.top = yOffset + "px";
+                bar.style.width = Math.max(2, (end - start) * SCALE) + "px"; // largeur min 2px
+                bar.style.background = color;
 
-        yOffset += 50;
-      });
+                // Label
+                const label = document.createElement("div");
+                label.className = "label";
+                label.style.left = (start - minYear) * SCALE + "px";
+                label.style.top = (yOffset + 22) + "px";
+                label.textContent = `${start}–${end}`;
 
-      timeline.style.width = (maxYear - minYear) * SCALE + 200 + "px";
-    }
-  </script>
-    </body>
+                timeline.appendChild(bar);
+                timeline.appendChild(label);
+
+                yOffset += 50;
+            });
+
+            timeline.style.width = (maxYear - minYear) * SCALE + 200 + "px";
+        }
+    </script>
+  </body>
 </html>
