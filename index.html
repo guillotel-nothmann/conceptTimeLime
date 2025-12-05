@@ -85,8 +85,8 @@
       window.grist.onRecords((records) => {
         // Transformation minimale pour s'assurer que les champs sont des nombres
         currentData = records.map(r => ({
-          startYear: +r.startYear,
-          endYear: +r.endYear,
+          hasStartYear: +r.startYear,
+          hasEndYear: +r.endYear,
           hasName: r.hasName
         }));
         render(currentData);
