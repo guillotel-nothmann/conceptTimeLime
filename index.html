@@ -1,100 +1,174 @@
-<div id="timeline-widget" style="width: 100%; height: 500px; border: 1px solid #ccc;"></div>
-  <div style="margin-top: 10px;">
-    <button id="zoom-out">-</button>
-    <span id="zoom-factor">Zoom: 1x</span>
-    <button id="zoom-in">+</button>
-  </div>
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Annual Timeline</title>
+    <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+    }
+
+    #gantt-container {
+      position: relative;
+      border: 1px solid #ccc;
+      height: 400px;
+      overflow-x: auto;
+      padding-top: 40px;
+    }
+
+    #controls {
+      position: sticky;
+      top: 0;
+      background: #fff;
+      padding: 4px;
+      z-index: 10;
+      border-bottom: 1px solid #ccc;
+    }
+
+    #controls button {
+      margin-right: 4px;
+    }
+
+    #timeline {
+      position: relative;
+      height: 400px;
+      white-space: nowrap;
+    }
+
+    .tick {
+      position: absolute;
+      top: 0;
+      height: 10px;
+      border-left: 1px solid #999;
+      font-size: 12px;
+      text-align: center;
+      transform: translateX(-1px);
+    }
+
+    .bar {
+      position: absolute;
+      height: 20px;
+      border-radius: 4px;
+      opacity: 0.9;
+    }
+
+    .label {
+      position: absolute;
+      font-size: 12px;
+      margin-top: -2px;
+      margin-left: 5px;
+      white-space: nowrap;
+    }
+  </style>
+  </head>
   
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script>
-(async function() {
-  const container = d3.select("#timeline-widget");
-  const width = container.node().clientWidth;
-  const height = container.node().clientHeight;
-  let zoomFactor = 1;
+  <body>
+    <div id="gantt-container">
+      <div id="controls">
+        <button onclick="zoomOut()">-</button>
+        <button onclick="zoomIn()">+</button>
+        <span id="zoom-level">Zoom: 1x</span>
+      </div>
+      <div id="timeline"></div>
+    </div>
+    
+    <script>
+    const timeline = document.getElementById("timeline");
+    const zoomLevelSpan = document.getElementById("zoom-level");
 
-  // Marges pour axes
-  const margin = { top: 20, right: 20, bottom: 40, left: 120 };
-  const innerWidth = width - margin.left - margin.right;
-  const innerHeight = height - margin.top - margin.bottom;
+    let recordsData = [];
+    let scale = 10; // 10px par an initialement
 
-  const svg = container.append("svg")
-    .attr("width", width)
-    .attr("height", height);
-
-  const g = svg.append("g")
-    .attr("transform", `translate(${margin.left},${margin.top})`);
-
-  // Échelles
-  const xScale = d3.scaleLinear().range([0, innerWidth]);
-  const yScale = d3.scaleBand().range([0, innerHeight]).padding(0.1);
-
-  const xAxisG = g.append("g")
-    .attr("transform", `translate(0, ${innerHeight})`);
-  const yAxisG = g.append("g");
-
-  const zoomSpan = d3.select("#zoom-factor");
-
-  function render(data) {
-    // Définir domaines
-    const xMin = d3.min(data, d => d.startYear);
-    const xMax = d3.max(data, d => d.endYear);
-    xScale.domain([xMin, xMax]).nice();
-
-    yScale.domain(data.map(d => d.hasName));
-
-    // Axes
-    xAxisG.call(d3.axisBottom(xScale).ticks(10).tickFormat(d3.format("d")));
-    yAxisG.call(d3.axisLeft(yScale));
-
-    // Rectangles
-    const bars = g.selectAll(".bar").data(data, d => d.hasName);
-
-    bars.enter()
-      .append("rect")
-      .attr("class", "bar")
-      .merge(bars)
-      .attr("x", d => xScale(d.startYear))
-      .attr("y", d => yScale(d.hasName))
-      .attr("width", d => xScale(d.endYear) - xScale(d.startYear))
-      .attr("height", yScale.bandwidth())
-      .attr("fill", "tomato");
-
-    bars.exit().remove();
-  }
-
-  function applyZoom(factor, data) {
-    zoomFactor *= factor;
-    const xDomain = xScale.domain();
-    const mid = (xDomain[0] + xDomain[1]) / 2;
-    const range = (xDomain[1] - xDomain[0]) / factor / 2;
-    xScale.domain([mid - range, mid + range]);
-    render(data);
-    zoomSpan.text(`Zoom: ${zoomFactor.toFixed(1)}x`);
-  }
-
-  // Zoom buttons
-  d3.select("#zoom-in").on("click", () => applyZoom(1.2, currentData));
-  d3.select("#zoom-out").on("click", () => applyZoom(0.8, currentData));
-
-  // --- Connexion Grist ---
-  let currentData = [];
-
-  if (window.grist) {
-    window.grist.ready().then(() => {
-      window.grist.onRecords((records) => {
-        // Transformation minimale pour s'assurer que les champs sont des nombres
-        currentData = records.map(r => ({
-          hasStartYear: +r.startYear,
-          hasEndYear: +r.endYear,
-          hasName: r.hasName
-        }));
-        render(currentData);
-      });
+    // Communication avec GRIST
+    window.grist?.ready({
+      columns: ["hasStartYear", "hasEndYear", "hasColor"]
     });
-  } else {
-    console.warn("Grist API not found");
-  }
-})();
-</script>
-  
+
+    window.grist?.onRecords(async (records) => {
+      recordsData = records;
+      fitToScreen();
+    });
+
+    function renderTimeline() {
+      timeline.innerHTML = "";
+      if (!recordsData.length) return;
+
+      const startYears = recordsData.map(r => r.hasStartYear).filter(v => v !== null);
+      const endYears = recordsData.map(r => r.hasEndYear || r.hasStartYear);
+
+      const minYear = Math.min(...startYears) - 5;
+      const maxYear = Math.max(...endYears) + 5;
+
+      // -- Graduations tous les 10 ans --
+      for (let year = Math.floor(minYear / 10) * 10; year <= maxYear; year += 10) {
+        let tick = document.createElement("div");
+        tick.className = "tick";
+        tick.style.left = (year - minYear) * scale + "px";
+        tick.innerHTML = `<div style="margin-top:12px">${year}</div>`;
+        timeline.appendChild(tick);
+      }
+
+      // -- Barres des événements --
+      let yOffset = 40;
+
+      recordsData.forEach((r) => {
+        if (r.hasStartYear == null) return;
+
+        let start = r.hasStartYear;
+        let end = r.hasEndYear || r.hasStartYear;
+        let color = r.hasColor || "#777";
+
+        // Barre
+        let bar = document.createElement("div");
+        bar.className = "bar";
+        bar.style.left = (start - minYear) * scale + "px";
+        bar.style.top = yOffset + "px";
+        bar.style.width = ((end - start) * scale) + "px";
+        bar.style.background = color;
+
+        // Label
+        let label = document.createElement("div");
+        label.className = "label";
+        label.style.left = (start - minYear) * scale + "px";
+        label.style.top = (yOffset + 22) + "px";
+        label.textContent = `${start}–${end}`;
+
+        timeline.appendChild(bar);
+        timeline.appendChild(label);
+
+        yOffset += 50;
+      });
+
+      timeline.style.width = (maxYear - minYear) * scale + 200 + "px";
+    }
+
+    // -- Zoom --
+    function zoomIn() {
+      scale *= 1.5;
+      zoomLevelSpan.textContent = `Zoom: ${scale.toFixed(1)}px/an`;
+      renderTimeline();
+    }
+
+    function zoomOut() {
+      scale /= 1.5;
+      zoomLevelSpan.textContent = `Zoom: ${scale.toFixed(1)}px/an`;
+      renderTimeline();
+    }
+
+    // -- Ajustement automatique pour tenir l’écran --
+    function fitToScreen() {
+      if (!recordsData.length) return;
+      const containerWidth = document.getElementById("gantt-container").offsetWidth;
+      const startYears = recordsData.map(r => r.hasStartYear).filter(v => v !== null);
+      const endYears = recordsData.map(r => r.hasEndYear || r.hasStartYear);
+      const minYear = Math.min(...startYears);
+      const maxYear = Math.max(...endYears);
+
+      scale = containerWidth / (maxYear - minYear + 10); // +10 pour marge
+      zoomLevelSpan.textContent = `Zoom: ${scale.toFixed(1)}px/an`;
+      renderTimeline();
+    }
+  </script>
+  </body>
+</html>
